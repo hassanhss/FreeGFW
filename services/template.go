@@ -293,15 +293,19 @@ func BuildUsers(templateName string) ([]map[string]interface{}, error) {
 
 	res := []map[string]interface{}{}
 
-	for _, u := range users {
+	// 提取通用逻辑为一个闭包函数
+	buildUserMap := func(name, uuid, password string, limit interface{}) map[string]interface{} {
 		userMap := map[string]interface{}{
-			"name":  u.Username,
-			"limit": u.SpeedLimit,
+			"name": name,
 		}
+		if limit != nil {
+			userMap["limit"] = limit
+		}
+
 		// Customize keys based on protocol type to avoid "unknown field" errors
 		switch serverType {
 		case "vmess", "vless":
-			userMap["uuid"] = u.UUID
+			userMap["uuid"] = uuid
 			if serverType == "vmess" {
 				userMap["alterId"] = 0
 			}
@@ -309,45 +313,31 @@ func BuildUsers(templateName string) ([]map[string]interface{}, error) {
 				userMap["flow"] = flow
 			}
 		case "tuic":
-			userMap["uuid"] = u.UUID
-			userMap["password"] = u.UUID // tuic might use password too? usually uuid. check docs if failure.
+			userMap["uuid"] = uuid
+			userMap["password"] = password
 		case "naive":
 			delete(userMap, "name")
-			userMap["username"] = u.Username
-			userMap["password"] = u.UUID
+			userMap["username"] = name
+			userMap["password"] = password
 		default:
 			// shadowsocks, trojan, hysteria2, etc. use "password"
-			userMap["password"] = u.UUID
+			userMap["password"] = password
 		}
-		res = append(res, userMap)
+		return userMap
 	}
 
+	// 1. 处理本地自有用户
+	for _, u := range users {
+		res = append(res, buildUserMap(u.Username, u.UUID, u.UUID, u.SpeedLimit))
+	}
+
+	// 2. 处理通过 Link 同步过来的远程节点用户
 	for _, l := range links {
 		var lUsers []string
 		json.Unmarshal(l.Users, &lUsers)
 		for _, uid := range lUsers {
-			userMap := map[string]interface{}{
-				"name": uid,
-			}
-			switch serverType {
-			case "vmess", "vless":
-				userMap["uuid"] = uid
-				if serverType == "vmess" {
-					userMap["alterId"] = 0
-				}
-				if serverType == "vless" && flow != "" {
-					userMap["flow"] = flow
-				}
-			case "tuic":
-				userMap["uuid"] = uid
-			case "naive":
-				delete(userMap, "name")
-				userMap["username"] = uid
-				userMap["password"] = uid
-			default:
-				userMap["password"] = uid
-			}
-			res = append(res, userMap)
+			// 同步来的用户没有独立的 Limit 配置，全字段沿用 uid
+			res = append(res, buildUserMap(uid, uid, uid, nil))
 		}
 	}
 	return res, nil
