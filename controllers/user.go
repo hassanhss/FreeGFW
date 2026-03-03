@@ -403,6 +403,10 @@ h1 { font-size: 1.5rem; margin-bottom: 2rem; color: #1a1a1a; font-weight: 700; }
 				params = append(params, "alpn=h3")
 			}
 			link = fmt.Sprintf("hy2://%s@%s:%s?%s#%s", uuid, hostname, port, strings.Join(params, "&"), titleAlias)
+
+		case "naive":
+			b64Data := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s@%s:%s", user.Username, uuid, hostname, port)))
+			link = fmt.Sprintf("https://%s?padding=1&method=auto", b64Data)
 		}
 		return link
 	}

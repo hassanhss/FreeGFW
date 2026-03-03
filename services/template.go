@@ -240,10 +240,12 @@ func InitTemplate(name string) error {
 
 	server := tmpl.Server
 	server["listen"] = "::"
-	server["listen_port"] = utils.RandomPort()
-	if isReality {
-		server["listen_port"] = 443
+	if server["listen_port"] == nil {
+		server["listen_port"] = utils.RandomPort()
 	}
+	// if isReality {
+	// 	server["listen_port"] = 443
+	// }
 	if _, ok := server["password"]; ok {
 		server["password"] = utils.RandomUUID()
 	}
@@ -313,6 +315,10 @@ func BuildUsers(templateName string) ([]map[string]interface{}, error) {
 		case "tuic":
 			userMap["uuid"] = u.UUID
 			userMap["password"] = u.UUID // tuic might use password too? usually uuid. check docs if failure.
+		case "naive":
+			delete(userMap, "name")
+			userMap["username"] = u.Username
+			userMap["password"] = u.UUID
 		default:
 			// shadowsocks, trojan, hysteria2, etc. use "password"
 			userMap["password"] = u.UUID
@@ -338,6 +344,10 @@ func BuildUsers(templateName string) ([]map[string]interface{}, error) {
 				}
 			case "tuic":
 				userMap["uuid"] = uid
+			case "naive":
+				delete(userMap, "name")
+				userMap["username"] = uid
+				userMap["password"] = uid
 			default:
 				userMap["password"] = uid
 			}

@@ -1,0 +1,21 @@
+{
+    "_name": "NaiveProxy",
+    "_description": "NaiveProxy 协议。",
+    "_core": "singbox",
+    "server": {
+        "type": "naive",
+        "listen": "::",
+        "listen_port": 443,
+        "tls": {
+            "enabled": true
+        }
+    },
+    "client": {
+        "type": "naive",
+        "server_port": 443,
+        "server": "127.0.0.1",
+        "tls": {
+            "enabled": true
+        }
+    }
+}

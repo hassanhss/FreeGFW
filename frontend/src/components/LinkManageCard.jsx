@@ -107,7 +107,7 @@ export function LinkManageCard() {
                 </div>
                 <div className='max-h-96 overflow-y-auto'>
                     {!linksLoaded && <PiSpinner className='text-primary animate-spin text-2xl mx-auto m-5' />}
-                    {!links?.length && linksLoaded && <div className='text-center text-sm opacity-70 m-5'>{t('no_users_yet')}</div>}
+                    {!links?.length && linksLoaded && <div className='text-center text-sm opacity-70 m-5'>{t('no_links_yet')}</div>}
                     {links?.map(link => (
                         <div key={link.id} className='flex items-center gap-4 p-4 border-b last:border-b-0'>
                             <div className='flex-1 flex items-center gap-4 truncate text-sm text-gray-600' title={link.ip}>
