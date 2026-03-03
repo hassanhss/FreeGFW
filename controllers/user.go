@@ -406,7 +406,7 @@ h1 { font-size: 1.5rem; margin-bottom: 2rem; color: #1a1a1a; font-weight: 700; }
 
 		case "naive":
 			b64Data := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s@%s:%s", user.Username, uuid, hostname, port)))
-			link = fmt.Sprintf("https://%s?padding=1&method=auto", b64Data)
+			link = fmt.Sprintf("http2://%s?padding=1&method=auto&peer=%s#%s", b64Data, serverName, titleAlias)
 		}
 		return link
 	}

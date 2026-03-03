@@ -1,5 +1,5 @@
 {
-    "_name": "NaiveProxy",
+    "_name": "NaiveProxy HTTP2",
     "_core": "singbox",
     "server": {
         "type": "naive",
