@@ -94,15 +94,7 @@ func (c *CoreService) refreshSingbox(server map[string]interface{}, templateName
 
 func monitorSingboxLoop() {
 
-	type MyConnection struct {
-		ID       string                 `json:"id"`
-		Metadata map[string]interface{} `json:"metadata"`
-		Upload   uint64                 `json:"upload"`
-		Download uint64                 `json:"download"`
-	}
-	type MySnapshot struct {
-		Connections []MyConnection `json:"connections"`
-	}
+
 
 	// Map connection ID to usage {Up, Down}
 	connStats := make(map[string]struct{ Up, Down uint64 })
@@ -180,84 +172,71 @@ func monitorSingboxLoop() {
 				snapshot := tm.Snapshot()
 				Hub.Broadcast("connections", snapshot)
 
-				// Process Per-User Traffic via JSON
-				// Bypass strict type checking for internal/unexported fields by marshalling to JSON
-				var s MySnapshot
-				data, err := json.Marshal(snapshot)
-				if err == nil {
-					json.Unmarshal(data, &s)
+				// Process Per-User Traffic natively
+				// Check for single user fallback ONCE per tick
+				var defaultUsername string
+				var userCount int64
+				database.DB.Model(&models.User{}).Count(&userCount)
+				if userCount == 1 {
+					var u models.User
+					if err := database.DB.First(&u).Error; err == nil {
+						defaultUsername = u.Username
+					}
+				}
 
-					// Check for single user fallback ONCE per tick
-					var defaultUsername string
-					var userCount int64
-					database.DB.Model(&models.User{}).Count(&userCount)
-					if userCount == 1 {
-						var u models.User
-						if err := database.DB.First(&u).Error; err == nil {
-							defaultUsername = u.Username
-						}
+				currentConns := make(map[string]bool)
+				for _, t := range snapshot.Connections {
+					tm := t.Metadata()
+					if tm == nil {
+						continue
+					}
+					id := tm.ID.String()
+					if id == "" {
+						continue
+					}
+					currentConns[id] = true
+
+					cUp := uint64(tm.Upload.Load())
+					cDown := uint64(tm.Download.Load())
+
+					prev, exists := connStats[id]
+					if !exists {
+						prev = struct{ Up, Down uint64 }{0, 0}
 					}
 
-					currentConns := make(map[string]bool)
-					for _, conn := range s.Connections {
-						id := conn.ID
-						if id == "" {
-							continue
-						}
-						currentConns[id] = true
+					// Calculate delta for this connection
+					dUp := int64(cUp) - int64(prev.Up)
+					dDown := int64(cDown) - int64(prev.Down)
 
-						cUp := conn.Upload
-						cDown := conn.Download
-
-						prev, exists := connStats[id]
-						if !exists {
-							prev = struct{ Up, Down uint64 }{0, 0}
-						}
-
-						// Calculate delta for this connection
-						dUp := int64(cUp) - int64(prev.Up)
-						dDown := int64(cDown) - int64(prev.Down)
-
-						if dUp < 0 {
-							dUp = 0
-						}
-						if dDown < 0 {
-							dDown = 0
-						}
-
-						connStats[id] = struct{ Up, Down uint64 }{cUp, cDown}
-
-						// Accumulate if user is identified
-						var inboundUser string
-						if v, ok := conn.Metadata["inboundUser"].(string); ok {
-							inboundUser = v
-						} else if v, ok := conn.Metadata["user"].(string); ok {
-							inboundUser = v
-						} else if v, ok := conn.Metadata["username"].(string); ok {
-							inboundUser = v
-						} else if v, ok := conn.Metadata["name"].(string); ok {
-							inboundUser = v
-						}
-
-						// Fallback if not identified
-						if inboundUser == "" && defaultUsername != "" {
-							inboundUser = defaultUsername
-						}
-
-						if inboundUser != "" {
-							user := inboundUser
-							uT := userTraffic[user]
-							uT.Up += dUp
-							uT.Down += dDown
-							userTraffic[user] = uT
-						}
+					if dUp < 0 {
+						dUp = 0
+					}
+					if dDown < 0 {
+						dDown = 0
 					}
 
-					// Cleanup stale connection stats
-					for id := range connStats {
-						if !currentConns[id] {
-							delete(connStats, id)
-						}
+					connStats[id] = struct{ Up, Down uint64 }{cUp, cDown}
+
+					// Accumulate if user is identified
+					inboundUser := tm.Metadata.User
+
+					// Fallback if not identified
+					if inboundUser == "" && defaultUsername != "" {
+						inboundUser = defaultUsername
+					}
+
+					if inboundUser != "" {
+						uT := userTraffic[inboundUser]
+						uT.Up += dUp
+						uT.Down += dDown
+						userTraffic[inboundUser] = uT
+					}
+				}
+
+				// Cleanup stale connection stats
+				for id := range connStats {
+					if !currentConns[id] {
+						delete(connStats, id)
 					}
 				}
 
