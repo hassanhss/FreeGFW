@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"log"
-	"sync/atomic"
 
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/net"
@@ -74,14 +73,9 @@ func (d *XrayDispatcher) Dispatch(ctx context.Context, dest net.Destination) (*t
 	}
 
 	limiter := d.tracker.GetLimiterForUser(email)
-	stats := GetXrayUserStats(email)
 
 	if limiter != nil {
 		log.Printf("[XrayDispatcher] Rate limiting user: %s, limit: %.2f", email, limiter.Limit())
-	}
-
-	if limiter == nil && stats == nil {
-		return link, nil
 	}
 
 	log.Printf("[XrayDispatcher] Wrapping connection for user: %s", email)
@@ -101,7 +95,6 @@ func (d *XrayDispatcher) Dispatch(ctx context.Context, dest net.Destination) (*t
 		newLink.Reader = &RateLimitedReader{
 			Reader:  link.Reader,
 			limiter: limiter,
-			stats:   stats,
 		}
 	}
 
@@ -109,7 +102,6 @@ func (d *XrayDispatcher) Dispatch(ctx context.Context, dest net.Destination) (*t
 		newLink.Writer = &RateLimitedWriter{
 			Writer:  link.Writer,
 			limiter: limiter,
-			stats:   stats,
 		}
 	}
 
@@ -134,25 +126,20 @@ func (d *XrayDispatcher) DispatchLink(ctx context.Context, dest net.Destination,
 
 	if email != "" {
 		limiter := d.tracker.GetLimiterForUser(email)
-		stats := GetXrayUserStats(email)
 
-		if limiter != nil || stats != nil {
-			log.Printf("[XrayDispatcher] Wrapping connection in DispatchLink for user: %s", email)
+		log.Printf("[XrayDispatcher] Wrapping connection in DispatchLink for user: %s", email)
 
-			// Wrap things in place
-			if link.Reader != nil {
-				link.Reader = &RateLimitedReader{
-					Reader:  link.Reader,
-					limiter: limiter,
-					stats:   stats,
-				}
+		// Wrap things in place
+		if link.Reader != nil {
+			link.Reader = &RateLimitedReader{
+				Reader:  link.Reader,
+				limiter: limiter,
 			}
-			if link.Writer != nil {
-				link.Writer = &RateLimitedWriter{
-					Writer:  link.Writer,
-					limiter: limiter,
-					stats:   stats,
-				}
+		}
+		if link.Writer != nil {
+			link.Writer = &RateLimitedWriter{
+				Writer:  link.Writer,
+				limiter: limiter,
 			}
 		}
 	}
@@ -178,7 +165,6 @@ func (d *XrayDispatcher) Close() error {
 type RateLimitedWriter struct {
 	buf.Writer
 	limiter *rate.Limiter
-	stats   *XrayTrafficStats
 }
 
 func (w *RateLimitedWriter) WriteMultiBuffer(mb buf.MultiBuffer) error {
@@ -197,9 +183,6 @@ func (w *RateLimitedWriter) WriteMultiBuffer(mb buf.MultiBuffer) error {
 				remaining -= waitN
 			}
 		}
-		if w.stats != nil {
-			atomic.AddInt64(&w.stats.Up, len)
-		}
 	}
 	return w.Writer.WriteMultiBuffer(mb)
 }
@@ -207,7 +190,6 @@ func (w *RateLimitedWriter) WriteMultiBuffer(mb buf.MultiBuffer) error {
 type RateLimitedReader struct {
 	buf.Reader
 	limiter *rate.Limiter
-	stats   *XrayTrafficStats
 }
 
 func (r *RateLimitedReader) ReadMultiBuffer() (buf.MultiBuffer, error) {
@@ -226,9 +208,6 @@ func (r *RateLimitedReader) ReadMultiBuffer() (buf.MultiBuffer, error) {
 				r.limiter.WaitN(context.Background(), waitN)
 				remaining -= waitN
 			}
-		}
-		if r.stats != nil {
-			atomic.AddInt64(&r.stats.Down, len)
 		}
 	}
 	return mb, err

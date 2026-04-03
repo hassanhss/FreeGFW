@@ -3,48 +3,17 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"freegfw/database"
 	"freegfw/models"
 
 	"log"
-	"sync"
 
 	xray_core "github.com/xtls/xray-core/core"
 )
 
-// XrayTrafficStats holds atomic counters for user traffic
-type XrayTrafficStats struct {
-	Up   int64
-	Down int64
-}
 
-// XrayUserTraffic maps user email/ID to their traffic stats
-var (
-	XrayUserTraffic      = make(map[string]*XrayTrafficStats)
-	XrayUserTrafficMutex sync.RWMutex
-)
-
-func GetXrayUserStats(user string) *XrayTrafficStats {
-	XrayUserTrafficMutex.RLock()
-	stats, ok := XrayUserTraffic[user]
-	XrayUserTrafficMutex.RUnlock()
-	if ok {
-		return stats
-	}
-
-	XrayUserTrafficMutex.Lock()
-	defer XrayUserTrafficMutex.Unlock()
-	// Double check
-	if stats, ok = XrayUserTraffic[user]; ok {
-		return stats
-	}
-	stats = &XrayTrafficStats{}
-	XrayUserTraffic[user] = stats
-	return stats
-}
 
 func (c *CoreService) refreshXray(server map[string]interface{}, templateName string) error {
 	users, _ := BuildUsers(templateName)
@@ -264,14 +233,19 @@ func monitorXrayLoop(instance *xray_core.Instance) {
 		diffUpTotal := int64(0)
 		diffDownTotal := int64(0)
 
-		// Iterate XrayUserTraffic
-		XrayUserTrafficMutex.RLock()
-
-		// Create a set of all users to check (from UserLimits + XrayUserTraffic)
+		// Create a set of all users to check (from database and UserLimits)
 		usersToCheck := make(map[string]bool)
-		for u := range XrayUserTraffic {
-			usersToCheck[u] = true
+
+		var allUsers []models.User
+		if err := database.DB.Find(&allUsers).Error; err == nil {
+			for _, u := range allUsers {
+				usersToCheck[u.Username] = true
+				if u.UUID != "" {
+					usersToCheck[u.UUID] = true
+				}
+			}
 		}
+
 		if coreInstance != nil && coreInstance.UserLimits != nil {
 			for u := range coreInstance.UserLimits {
 				usersToCheck[u] = true
@@ -281,12 +255,6 @@ func monitorXrayLoop(instance *xray_core.Instance) {
 		for user := range usersToCheck {
 			cUp := int64(0)
 			cDown := int64(0)
-
-			// 1. Get from Custom Dispatcher (XrayUserTraffic)
-			if stats, ok := XrayUserTraffic[user]; ok {
-				cUp += atomic.LoadInt64(&stats.Up)
-				cDown += atomic.LoadInt64(&stats.Down)
-			}
 
 			// 2. Get from Internal Stats Manager
 			if coreInstance != nil && coreInstance.XrayStats != nil {
@@ -329,7 +297,6 @@ func monitorXrayLoop(instance *xray_core.Instance) {
 				userTraffic[user] = uT
 			}
 		}
-		XrayUserTrafficMutex.RUnlock()
 
 		if Hub != nil {
 			speed := map[string]float64{
