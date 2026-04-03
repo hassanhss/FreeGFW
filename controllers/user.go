@@ -307,6 +307,27 @@ h1 { font-size: 1.5rem; margin-bottom: 2rem; color: #1a1a1a; font-weight: 700; }
 			hostname = "[" + ip + "]"
 		}
 
+		transport, _ := server["transport"].(map[string]interface{})
+		netType := "tcp" // default
+		path := ""
+		host := ""
+
+		if transport != nil {
+			if t, ok := transport["type"].(string); ok && t != "" {
+				netType = t
+			}
+			if p, ok := transport["path"].(string); ok && p != "" {
+				path = p
+			}
+			if h, ok := transport["host"].(string); ok && h != "" {
+				host = h
+			} else if hVal, ok := transport["host"].([]interface{}); ok && len(hVal) > 0 {
+				if s, ok := hVal[0].(string); ok {
+					host = s
+				}
+			}
+		}
+
 		var link string
 		switch serverType {
 		case "vmess":
@@ -318,15 +339,17 @@ h1 { font-size: 1.5rem; margin-bottom: 2rem; color: #1a1a1a; font-weight: 700; }
 				"id":   uuid,
 				"aid":  "0",
 				"scy":  "auto",
-				"net":  "tcp",
+				"net":  netType,
 				"type": "none",
-				"host": "",
-				"path": "",
+				"host": host,
+				"path": path,
 				"tls":  "",
 			}
 			if isTLS {
 				v["tls"] = "tls"
-				v["sni"] = serverName
+				if serverName != "" {
+					v["sni"] = serverName
+				}
 			}
 			b, _ := json.Marshal(v)
 			link = "vmess://" + base64.StdEncoding.EncodeToString(b)
@@ -334,26 +357,6 @@ h1 { font-size: 1.5rem; margin-bottom: 2rem; color: #1a1a1a; font-weight: 700; }
 		case "vless":
 			// vless://uuid@ip:port?security=reality&sni=...&fp=...&type=tcp&headerType=none#title
 			flowVal, _ := server["flow"].(string)
-			transport, _ := server["transport"].(map[string]interface{})
-			netType := "tcp" // default
-			path := ""
-			host := ""
-
-			if transport != nil {
-				if t, ok := transport["type"].(string); ok && t != "" {
-					netType = t
-				}
-				if p, ok := transport["path"].(string); ok && p != "" {
-					path = p
-				}
-				if h, ok := transport["host"].(string); ok && h != "" {
-					host = h
-				} else if hVal, ok := transport["host"].([]interface{}); ok && len(hVal) > 0 {
-					if s, ok := hVal[0].(string); ok {
-						host = s
-					}
-				}
-			}
 
 			params := []string{}
 			if isTLS {

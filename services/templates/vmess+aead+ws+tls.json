@@ -1,0 +1,28 @@
+{
+    "_name": "Vmess WS AEAD TLS",
+    "server": {
+        "type": "vmess",
+        "listen": "::",
+        "listen_port": 443,
+        "tls": {
+            "enabled": true
+        },
+        "transport": {
+            "type": "ws",
+            "path": "/"
+        }
+    },
+    "client": {
+        "type": "vmess",
+        "server_port": 443,
+        "server": "127.0.0.1",
+        "alter_id": 0,
+        "tls": {
+            "enabled": true
+        },
+        "transport": {
+            "type": "ws",
+            "path": "/"
+        }
+    }
+}

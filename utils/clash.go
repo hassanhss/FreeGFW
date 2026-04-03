@@ -48,6 +48,27 @@ func ToClashProxy(server map[string]interface{}, ip, port, uuid, title string) m
 		}
 	}
 
+	transport, _ := server["transport"].(map[string]interface{})
+	netType := "tcp" // default
+	path := ""
+	host := ""
+
+	if transport != nil {
+		if t, ok := transport["type"].(string); ok && t != "" {
+			netType = t
+		}
+		if p, ok := transport["path"].(string); ok && p != "" {
+			path = p
+		}
+		if h, ok := transport["host"].(string); ok && h != "" {
+			host = h
+		} else if hVal, ok := transport["host"].([]interface{}); ok && len(hVal) > 0 {
+			if s, ok := hVal[0].(string); ok {
+				host = s
+			}
+		}
+	}
+
 	switch serverType {
 	case "vmess":
 		proxy["type"] = "vmess"
@@ -61,9 +82,16 @@ func ToClashProxy(server map[string]interface{}, ip, port, uuid, title string) m
 				proxy["servername"] = serverName
 			}
 		}
-		// Assuming network is TCP as per existing logic (vmess case hardcodes net: tcp)
-		// But in original code: "net": "tcp", "type": "none"
-		proxy["network"] = "tcp"
+		proxy["network"] = netType
+		if netType == "ws" {
+			proxy["ws-opts"] = map[string]interface{}{}
+			if path != "" {
+				proxy["ws-opts"].(map[string]interface{})["path"] = path
+			}
+			if host != "" {
+				proxy["ws-opts"].(map[string]interface{})["headers"] = map[string]interface{}{"Host": host}
+			}
+		}
 
 	case "vless":
 		proxy["type"] = "vless"
@@ -74,7 +102,9 @@ func ToClashProxy(server map[string]interface{}, ip, port, uuid, title string) m
 
 		if isTLS {
 			proxy["tls"] = true
-			proxy["servername"] = serverName
+			if serverName != "" {
+				proxy["servername"] = serverName
+			}
 			if isReality {
 				proxy["reality-opts"] = map[string]interface{}{
 					"public-key": realityPub,
@@ -83,7 +113,16 @@ func ToClashProxy(server map[string]interface{}, ip, port, uuid, title string) m
 				proxy["client-fingerprint"] = "chrome"
 			}
 		}
-		proxy["network"] = "tcp"
+		proxy["network"] = netType
+		if netType == "ws" {
+			proxy["ws-opts"] = map[string]interface{}{}
+			if path != "" {
+				proxy["ws-opts"].(map[string]interface{})["path"] = path
+			}
+			if host != "" {
+				proxy["ws-opts"].(map[string]interface{})["headers"] = map[string]interface{}{"Host": host}
+			}
+		}
 
 	case "trojan":
 		proxy["type"] = "trojan"

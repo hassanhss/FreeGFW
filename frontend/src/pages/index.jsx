@@ -7,6 +7,7 @@ import { Modal } from "../components/Modal";
 import { SettingsCard } from "../components/SettingsCard";
 import { LetsEncrypt } from "./start/letsencrypt";
 import { useLanguageStore } from "../store/useLanguageStore";
+import { Alert } from "../components/Alert";
 
 export default function Index() {
     const { data: config, loaded } = useGetConfigs()
@@ -14,38 +15,36 @@ export default function Index() {
     return (
         <div className='grid grid-cols-1 gap-4'>
             {loaded && !config?.ssl && (
-                <div className='bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/20'>
-                    <div className='flex items-center justify-between'>
-                        <div>
-                            <div className='text-lg'>{t('ssl_not_configured')}</div>
-                            <div className='text-sm opacity-70'>{t('ssl_warning_index')}</div>
-                        </div>
-                        <Modal
-                            content={(
-                                <LetsEncrypt />
-                            )}
-                            title={t('configure_ssl')}
-                        >
-                            <Button variant='outline' className='cursor-pointer rounded-full bg-yellow-500 hover:bg-yellow-500/80'>{t('configure_ssl')}</Button>
-                        </Modal>
-                    </div>
-                </div>
+                <Alert
+                    type='danger'
+                    title={t('ssl_not_configured')}
+                    description={t('ssl_warning_index')}
+                >
+                    <Modal
+                        content={(
+                            <LetsEncrypt />
+                        )}
+                        title={t('configure_ssl')}
+                    >
+                        <Button variant='outline' className='text-white hover:text-white cursor-pointer rounded-full bg-red-500 hover:bg-red-500/80'>{t('configure_ssl')}</Button>
+                    </Modal>
+                </Alert>
             )}
             {loaded && !config?.has_password && (
-                <div className='bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/20 flex items-center justify-between'>
-                    <div>
-                        <div className='text-lg'>{t('password_not_set')}</div>
-                        <div className='text-sm opacity-70'>{t('password_warning_desc')}</div>
-                    </div>
+                <Alert
+                    type='danger'
+                    title={t('password_not_set')}
+                    description={t('password_warning_desc')}
+                >
                     <Modal
                         content={(
                             <SettingsCard />
                         )}
                         title={t('system_settings')}
                     >
-                        <Button variant='outline' className='cursor-pointer rounded-full bg-yellow-500 hover:bg-yellow-500/80'>{t('set_password')}</Button>
+                        <Button variant='outline' className='text-white hover:text-white cursor-pointer rounded-full bg-red-500 hover:bg-red-500/80'>{t('set_password')}</Button>
                     </Modal>
-                </div>
+                </Alert>
             )}
             <StatusCard />
             <UserManageCard />
