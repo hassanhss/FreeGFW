@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -61,6 +62,10 @@ func (c *CoreService) refreshSingbox(server map[string]interface{}, templateName
 
 	tls, _ := BuildServerTLS(templateName)
 
+	// Set timeouts to prevent Goroutine leaks
+	server["tcp_fast_open"] = true
+	server["udp_timeout"] = "5m"
+	
 	server["users"] = users
 	if tls != nil {
 		if serverTls, ok := server["tls"].(map[string]interface{}); ok {
@@ -170,6 +175,16 @@ func monitorSingboxLoop() {
 
 				// Connections Snapshot
 				snapshot := tm.Snapshot()
+
+				// Watchdog for Goroutine/Connection Leaks
+				if len(snapshot.Connections) > 8000 {
+					log.Printf("[Watchdog] High connection count (%d) detected, possible leak. Restarting engine...\n", len(snapshot.Connections))
+					go func() {
+						coreInstance.Restart()
+					}()
+					return // Exit current loop
+				}
+
 				Hub.Broadcast("connections", snapshot)
 
 				// Process Per-User Traffic natively

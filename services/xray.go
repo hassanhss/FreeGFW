@@ -183,6 +183,10 @@ func (c *CoreService) refreshXray(server map[string]interface{}, templateName st
 			"0": map[string]interface{}{
 				"statsUserUplink":   true,
 				"statsUserDownlink": true,
+				"handshake":         4,
+				"connIdle":          300,
+				"uplinkOnly":        2,
+				"downlinkOnly":      5,
 			},
 		},
 		"system": map[string]interface{}{
